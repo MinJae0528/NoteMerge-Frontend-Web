@@ -1,21 +1,27 @@
 'use client';
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 export default function LibraryDetail({ noteId }: { noteId: number }) {
   const [detail, setDetail] = useState<any>(null);
+  const router = useRouter();
 
   useEffect(() => {
+    if (!noteId) return;
     fetch(`http://localhost:3000/api/notes/${noteId}`, {
       headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
     })
       .then(res => res.json())
-      .then(data => setDetail(data.data));
+      .then(data => setDetail(data?.data?.note || data?.data));
   }, [noteId]);
 
-  if (!detail) return <div>로딩 중...</div>;
+  if (!detail) return <div className="p-8 text-center">로딩 중...</div>;
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-8 space-y-8">
+      <button className="mb-4 text-blue-600" onClick={() => router.back()}>
+        ← 목록으로
+      </button>
       <section className="bg-white p-4 rounded-xl shadow space-y-4">
         <h2 className="text-lg font-bold mb-2">{detail.title || detail.name}</h2>
         {detail.type === "image" && (

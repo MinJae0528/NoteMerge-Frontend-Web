@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 
 export default function HomePresenter() {
   // 파일 목록, 선택 파일, 페이지
@@ -22,35 +22,48 @@ export default function HomePresenter() {
     })
       .then(res => res.json())
       .then(data => {
-        setFiles(data.data || []);
-        if (data.data && data.data.length > 0) setSelected(data.data[0]);
+        // files 배열 안전하게 추출
+        const filesArr = Array.isArray(data?.data?.notes)
+          ? data.data.notes
+          : [];
+        setFiles(filesArr);
+        if (filesArr.length > 0) setSelected(filesArr[0]);
       });
   }, []);
 
+  // 항상 일정한 타입의 noteId 추출
+  const selectedNoteId = useMemo(() => {
+    if (!selected) return null;
+    if (typeof selected === "object") return selected.note_id || selected.id || null;
+    return selected;
+  }, [selected]);
+
   // 선택 파일 상세/요약/키워드 불러오기
   useEffect(() => {
-    if (!selected) return;
-    fetch(`http://localhost:3000/api/notes/${selected.id}`, {
+    if (!selectedNoteId) return;
+    fetch(`http://localhost:3000/api/notes/${selectedNoteId}`, {
       headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
     })
       .then(res => res.json())
       .then(data => {
-        setSummary(data.data.summary || "");
-        setKeywords(data.data.keywords || []);
-        setTotalPages(data.data.totalPages || 1);
+        setSummary(data?.data?.note?.summary || "");
+        // keywords는 문자열일 수 있으니 배열로 변환
+        const kw = data?.data?.note?.keywords;
+        setKeywords(Array.isArray(kw) ? kw : typeof kw === "string" ? kw.split(",") : []);
+        setTotalPages(data?.data?.note?.totalPages || 1);
       });
-  }, [selected]);
+  }, [selectedNoteId]);
 
   // 키워드 추가
   const handleAddKeyword = async () => {
-    if (!newKeyword.trim() || keywords.includes(newKeyword.trim()) || !selected) return;
+    if (!newKeyword.trim() || keywords.includes(newKeyword.trim()) || !selectedNoteId) return;
     await fetch(`http://localhost:3000/api/keywords`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${localStorage.getItem("token")}`
       },
-      body: JSON.stringify({ name: newKeyword, note_id: selected.id })
+      body: JSON.stringify({ name: newKeyword, note_id: selectedNoteId })
     });
     setKeywords([...keywords, newKeyword.trim()]);
     setNewKeyword("");
@@ -58,7 +71,6 @@ export default function HomePresenter() {
 
   // 키워드 삭제
   const handleRemoveKeyword = async (idx: number) => {
-    // 실제 API에서는 키워드 id가 필요할 수 있음
     const keyword = keywords[idx];
     await fetch(`http://localhost:3000/api/keywords/${keyword}`, {
       method: "DELETE",
@@ -81,7 +93,6 @@ export default function HomePresenter() {
     filePreview = (
       <div className="flex items-center justify-center bg-gray-100 rounded h-[500px]">
         <span className="text-lg text-gray-600">
-          {/* 실제 PDF 뷰어로 교체 가능 */}
           PDF {page}페이지 미리보기
         </span>
       </div>
@@ -100,21 +111,24 @@ export default function HomePresenter() {
       <aside className="w-1/4 space-y-4">
         <h2 className="text-lg font-bold mb-2">내 자료</h2>
         <ul className="space-y-2">
-          {files.map((file) => (
-            <li key={file.id}>
-              <button
-                className={`w-full text-left p-2 rounded ${
-                  selected?.id === file.id ? "bg-yellow-100 font-bold" : "bg-gray-100"
-                }`}
-                onClick={() => {
-                  setSelected(file);
-                  setPage(1);
-                }}
-              >
-                {file.name || file.title}
-              </button>
-            </li>
-          ))}
+          {Array.isArray(files) &&
+            files.map((file) => (
+              <li key={file.note_id || file.id}>
+                <button
+                  className={`w-full text-left p-2 rounded ${
+                    selected?.note_id === file.note_id || selected?.id === file.id
+                      ? "bg-yellow-100 font-bold"
+                      : "bg-gray-100"
+                  }`}
+                  onClick={() => {
+                    setSelected(file);
+                    setPage(1);
+                  }}
+                >
+                  {file.name || file.title}
+                </button>
+              </li>
+            ))}
         </ul>
       </aside>
 
