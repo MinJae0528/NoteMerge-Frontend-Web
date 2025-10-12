@@ -1,53 +1,98 @@
 'use client'
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export default function HomePresenter() {
-  // 예시 데이터
-  const files = [
-    { id: 1, name: "알고리즘 개론.pdf", type: "pdf" },
-    { id: 2, name: "자료구조 노트.txt", type: "txt" },
-    { id: 3, name: "팀프로젝트 회의록.txt", type: "txt" },
-    { id: 4, name: "샘플 이미지.png", type: "image", src: "/Images/sample.png" },
-  ];
-  const [selected, setSelected] = useState(files[0]);
+  // 파일 목록, 선택 파일, 페이지
+  const [files, setFiles] = useState<any[]>([]);
+  const [selected, setSelected] = useState<any | null>(null);
   const [page, setPage] = useState(1);
-  const totalPages = 5; // PDF 예시
+  const [totalPages, setTotalPages] = useState(1);
 
   // 키워드 관리
-  const [keywords, setKeywords] = useState(["React", "상태관리", "PDF"]);
+  const [keywords, setKeywords] = useState<string[]>([]);
   const [newKeyword, setNewKeyword] = useState("");
-  const handleRemoveKeyword = (idx: number) => {
+
+  // 요약
+  const [summary, setSummary] = useState("");
+
+  // 파일 목록 불러오기
+  useEffect(() => {
+    fetch("http://localhost:3000/api/notes", {
+      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
+    })
+      .then(res => res.json())
+      .then(data => {
+        setFiles(data.data || []);
+        if (data.data && data.data.length > 0) setSelected(data.data[0]);
+      });
+  }, []);
+
+  // 선택 파일 상세/요약/키워드 불러오기
+  useEffect(() => {
+    if (!selected) return;
+    fetch(`http://localhost:3000/api/notes/${selected.id}`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
+    })
+      .then(res => res.json())
+      .then(data => {
+        setSummary(data.data.summary || "");
+        setKeywords(data.data.keywords || []);
+        setTotalPages(data.data.totalPages || 1);
+      });
+  }, [selected]);
+
+  // 키워드 추가
+  const handleAddKeyword = async () => {
+    if (!newKeyword.trim() || keywords.includes(newKeyword.trim()) || !selected) return;
+    await fetch(`http://localhost:3000/api/keywords`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${localStorage.getItem("token")}`
+      },
+      body: JSON.stringify({ name: newKeyword, note_id: selected.id })
+    });
+    setKeywords([...keywords, newKeyword.trim()]);
+    setNewKeyword("");
+  };
+
+  // 키워드 삭제
+  const handleRemoveKeyword = async (idx: number) => {
+    // 실제 API에서는 키워드 id가 필요할 수 있음
+    const keyword = keywords[idx];
+    await fetch(`http://localhost:3000/api/keywords/${keyword}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
+    });
     setKeywords(keywords.filter((_, i) => i !== idx));
   };
-  const handleAddKeyword = () => {
-    if (newKeyword.trim() && !keywords.includes(newKeyword.trim())) {
-      setKeywords([...keywords, newKeyword.trim()]);
-      setNewKeyword("");
-    }
-  };
 
-  // 파일 미리보기 렌더링
-  let filePreview;
-  if (selected.type === "image") {
-    filePreview = (
-      <img src={selected.src} alt={selected.name} className="max-w-full max-h-[500px] mx-auto" />
-    );
-  } else if (selected.type === "pdf") {
-    filePreview = (
-      <div className="flex items-center justify-center bg-gray-100 rounded h-[500px]">
-        <span className="text-lg text-gray-600">PDF 파일의 {page}페이지 내용이 여기에 표시됩니다.</span>
-      </div>
-    );
-  } else {
-    filePreview = (
-      <pre className="bg-gray-100 p-6 rounded text-base h-[500px] overflow-auto flex items-center">여기에 원본 파일 내용이 들어갑니다...</pre>
-    );
-  }
-
-  const summary = "여기에 정리된 요약 내용이 들어갑니다...";
-
+  // PDF 페이지 이동
   const handlePrev = () => setPage((p) => Math.max(1, p - 1));
   const handleNext = () => setPage((p) => Math.min(totalPages, p + 1));
+
+  // 파일 미리보기
+  let filePreview = null;
+  if (selected?.type === "image") {
+    filePreview = (
+      <img src={selected.src || selected.url} alt={selected.name} className="max-w-full max-h-[500px] mx-auto" />
+    );
+  } else if (selected?.type === "pdf") {
+    filePreview = (
+      <div className="flex items-center justify-center bg-gray-100 rounded h-[500px]">
+        <span className="text-lg text-gray-600">
+          {/* 실제 PDF 뷰어로 교체 가능 */}
+          PDF {page}페이지 미리보기
+        </span>
+      </div>
+    );
+  } else if (selected) {
+    filePreview = (
+      <pre className="bg-gray-100 p-6 rounded text-base h-[500px] overflow-auto flex items-center">
+        {selected.content || "원본 파일 내용"}
+      </pre>
+    );
+  }
 
   return (
     <div className="flex max-w-6xl mx-auto px-6 py-8 gap-8">
@@ -59,16 +104,14 @@ export default function HomePresenter() {
             <li key={file.id}>
               <button
                 className={`w-full text-left p-2 rounded ${
-                  selected.id === file.id
-                    ? "bg-yellow-100 font-bold"
-                    : "bg-gray-100"
+                  selected?.id === file.id ? "bg-yellow-100 font-bold" : "bg-gray-100"
                 }`}
                 onClick={() => {
                   setSelected(file);
                   setPage(1);
                 }}
               >
-                {file.name}
+                {file.name || file.title}
               </button>
             </li>
           ))}
@@ -81,7 +124,7 @@ export default function HomePresenter() {
         <section className="bg-white p-4 rounded-xl shadow space-y-4">
           <h2 className="text-lg font-bold mb-2">파일 미리보기</h2>
           {filePreview}
-          {selected.type === "pdf" && (
+          {selected?.type === "pdf" && (
             <div className="flex gap-2 justify-end mt-2">
               <button
                 onClick={handlePrev}

@@ -1,11 +1,18 @@
+'use client';
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
 
 export default function QuizPresenter() {
-  const quizzes = [
-    { id: 1, title: "알고리즘 개론 퀴즈" },
-    { id: 2, title: "자료구조 복습 퀴즈" },
-    { id: 3, title: "네트워크 기본 퀴즈" },
-  ];
+  const [quizzes, setQuizzes] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch("http://localhost:3000/api/quizzes", {
+      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+    })
+      .then((res) => res.json())
+      .then((data) => setQuizzes(data.data || []));
+  }, []);
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">
@@ -15,7 +22,7 @@ export default function QuizPresenter() {
           <Link
             key={quiz.id}
             href={`/quiz/${quiz.id}`}
-            className="p-4 bg-white rounded-xl shadow hover:bg-gray-50"
+            className="p-4 bg-white rounded-xl shadow hover:bg-gray-50 block"
           >
             {quiz.title}
           </Link>

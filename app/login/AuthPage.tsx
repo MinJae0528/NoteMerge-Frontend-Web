@@ -1,24 +1,129 @@
-import { useState } from "react";
+'use client';
+
+import { useState, useEffect } from "react";
 
 export default function AuthPage({ mode = "login" }) {
   const [email, setEmail] = useState("");
+  const [nickname, setNickname] = useState(""); // 닉네임 추가
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [isLogin, setIsLogin] = useState(mode === "login");
+  const [loggedIn, setLoggedIn] = useState(false);
 
-  const isLogin = mode === "login";
+  // 클라이언트에서만 localStorage 접근
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setLoggedIn(!!localStorage.getItem("token"));
+    }
+  }, []);
+
+  // 로그인/회원가입 처리
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setMessage("");
+    setLoading(true);
+
+    if (!isLogin && password !== confirmPassword) {
+      setMessage("비밀번호가 일치하지 않습니다.");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const res = await fetch(
+        isLogin
+          ? "http://localhost:3000/api/auth/login"
+          : "http://localhost:3000/api/auth/register",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(
+            isLogin
+              ? { username: email, password }
+              : { username: nickname, email, password } // 회원가입 시 닉네임(username) 추가
+          ),
+        }
+      );
+      const data = await res.json();
+      if (data.success) {
+        if (typeof window !== "undefined") {
+          localStorage.setItem("token", data.data.token);
+        }
+        setMessage(isLogin ? "로그인 성공!" : "회원가입 성공! 자동 로그인됩니다.");
+        setLoggedIn(true);
+        setTimeout(() => (window.location.href = "/"), 1000);
+      } else {
+        setMessage(data.message || "오류가 발생했습니다.");
+      }
+    } catch {
+      setMessage("네트워크 오류가 발생했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 로그아웃 처리
+  const handleLogout = () => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("token");
+    }
+    setLoggedIn(false);
+    setMessage("로그아웃 되었습니다.");
+  };
+
+  if (loggedIn) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="w-full max-w-md bg-[#F3F4F6] p-8 rounded-xl shadow-lg space-y-6 text-center">
+          <img
+            src="/Images/notemerge_logo.png"
+            alt="Notemerge Logo"
+            className="h-12 mx-auto mb-6"
+          />
+          <h2 className="text-2xl font-bold text-black mb-4">
+            로그인 상태입니다
+          </h2>
+          <button
+            onClick={handleLogout}
+            className="w-full bg-[#FACC15] text-black font-semibold py-2 rounded-md hover:bg-yellow-500 transition"
+          >
+            로그아웃
+          </button>
+          {message && (
+            <div className="text-center text-sm text-red-600 mt-2">{message}</div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-white">
-      <div className="w-full max-w-md bg-[#F3F4F6] p-8 rounded-xl shadow-lg space-y-6">
+      <form
+        onSubmit={handleSubmit}
+        className="w-full max-w-md bg-[#F3F4F6] p-8 rounded-xl shadow-lg space-y-6"
+      >
         {/* 로고 */}
         <div className="flex justify-center mb-6">
           <img src="/Images/notemerge_logo.png" alt="Notemerge Logo" className="h-12" />
         </div>
 
-        {/* 제목 */}
-        <h2 className="text-2xl font-bold text-center text-black">
-          {isLogin ? "로그인" : "회원가입"}
-        </h2>
+        {/* 회원가입 시 닉네임 입력 */}
+        {!isLogin && (
+          <div>
+            <label className="block text-sm text-[#374151] mb-1">닉네임</label>
+            <input
+              type="text"
+              value={nickname}
+              onChange={(e) => setNickname(e.target.value)}
+              className="w-full border border-[#9CA3AF] rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#FACC15]"
+              placeholder="닉네임을 입력하세요"
+              required
+            />
+          </div>
+        )}
 
         {/* 이메일 입력 */}
         <div>
@@ -29,6 +134,7 @@ export default function AuthPage({ mode = "login" }) {
             onChange={(e) => setEmail(e.target.value)}
             className="w-full border border-[#9CA3AF] rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#FACC15]"
             placeholder="이메일을 입력하세요"
+            required
           />
         </div>
 
@@ -41,6 +147,7 @@ export default function AuthPage({ mode = "login" }) {
             onChange={(e) => setPassword(e.target.value)}
             className="w-full border border-[#9CA3AF] rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#FACC15]"
             placeholder="비밀번호를 입력하세요"
+            required
           />
         </div>
 
@@ -54,34 +161,68 @@ export default function AuthPage({ mode = "login" }) {
               onChange={(e) => setConfirmPassword(e.target.value)}
               className="w-full border border-[#9CA3AF] rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#FACC15]"
               placeholder="비밀번호를 다시 입력하세요"
+              required
             />
           </div>
         )}
 
         {/* 버튼 */}
-        <button className="w-full bg-[#FACC15] text-black font-semibold py-2 rounded-md hover:bg-yellow-500 transition">
-          {isLogin ? "로그인" : "회원가입"}
+        <button
+          type="submit"
+          className="w-full bg-[#FACC15] text-black font-semibold py-2 rounded-md hover:bg-yellow-500 transition"
+          disabled={loading}
+        >
+          {loading
+            ? isLogin
+              ? "로그인 중..."
+              : "회원가입 중..."
+            : isLogin
+            ? "로그인"
+            : "회원가입"}
         </button>
+
+        {/* 메시지 */}
+        {message && (
+          <div className="text-center text-sm text-red-600">{message}</div>
+        )}
 
         {/* 모드 전환 */}
         <p className="text-center text-sm text-[#374151]">
           {isLogin ? (
             <>
               계정이 없으신가요?{" "}
-              <a href="/signup" className="text-[#FACC15] font-medium">
+              <button
+                type="button"
+                className="text-[#FACC15] font-medium underline"
+                onClick={() => {
+                  setIsLogin(false);
+                  setMessage("");
+                  setPassword("");
+                  setConfirmPassword("");
+                }}
+              >
                 회원가입
-              </a>
+              </button>
             </>
           ) : (
             <>
               이미 계정이 있으신가요?{" "}
-              <a href="/login" className="text-[#FACC15] font-medium">
+              <button
+                type="button"
+                className="text-[#FACC15] font-medium underline"
+                onClick={() => {
+                  setIsLogin(true);
+                  setMessage("");
+                  setPassword("");
+                  setConfirmPassword("");
+                }}
+              >
                 로그인
-              </a>
+              </button>
             </>
           )}
         </p>
-      </div>
+      </form>
     </div>
   );
 }
