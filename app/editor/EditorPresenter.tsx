@@ -35,7 +35,7 @@ export default function EditorPresenter() {
     const formData = new FormData();
     formData.append("title", title);
     formData.append("content", content);
-    files.forEach(file => formData.append("file", file));
+    files.forEach(file => formData.append("files", file));
 
     try {
       const res = await fetch("http://localhost:3000/api/notes", {

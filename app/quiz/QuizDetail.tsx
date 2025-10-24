@@ -116,27 +116,30 @@ export default function QuizDetail({ quizId }: { quizId: number }) {
     }
   };
 
-  // 객관식 선택지 렌더링
+  // 객관식 선택지 렌더링 (모든 문제가 객관식)
   const renderMultipleChoice = (question: any, questionIndex: number) => {
-    // options가 null인 경우 기본 선택지 제공하거나 서버에서 추가 데이터 요청
-    let options = question.options || question.choices || [];
+    let options = question.options || [];
     
-    // options가 문자열인 경우 파싱 시도
+    // options가 문자열인 경우 JSON 파싱 시도
     if (typeof options === 'string') {
       try {
         options = JSON.parse(options);
+        console.log(`문제 ${questionIndex + 1} 파싱된 선택지:`, options);
       } catch (e) {
+        console.error(`문제 ${questionIndex + 1} JSON 파싱 실패:`, e);
         options = [];
       }
     }
     
-    // 빈 배열인 경우 임시 선택지 제공 (실제로는 서버에서 제공되어야 함)
-    if (!options || options.length === 0) {
-      console.warn('선택지가 없는 객관식 문제:', question);
+    // 배열이 아니거나 빈 배열인 경우 처리
+    if (!Array.isArray(options) || options.length === 0) {
+      console.warn(`문제 ${questionIndex + 1} 선택지가 없거나 올바르지 않음:`, question.options);
       return (
         <div className="bg-red-50 border border-red-200 p-4 rounded-lg">
           <p className="text-red-600 font-medium">❌ 이 문제의 선택지를 불러올 수 없습니다.</p>
-          <p className="text-red-500 text-sm mt-1">서버에서 선택지 데이터를 제공해야 합니다.</p>
+          <p className="text-red-500 text-sm mt-1">
+            원본 데이터: {JSON.stringify(question.options)}
+          </p>
         </div>
       );
     }
@@ -162,27 +165,10 @@ export default function QuizDetail({ quizId }: { quizId: number }) {
               className="w-5 h-5 text-[#FACC15] border-[#9CA3AF] focus:ring-[#FACC15] focus:ring-2"
             />
             <span className="ml-3 text-[#374151] text-base leading-relaxed">
-              {option}
+              {optionIndex + 1}. {option}
             </span>
           </label>
         ))}
-      </div>
-    );
-  };
-
-  // 단답형 입력창 렌더링
-  const renderShortAnswer = (question: any, questionIndex: number) => {
-    return (
-      <div className="space-y-3">
-        <input
-          type="text"
-          value={answers[question.question_id] || ""}
-          onChange={(e) => handleChange(question.question_id.toString(), e.target.value)}
-          disabled={submitted}
-          placeholder="정답을 입력하세요"
-          className="w-full px-4 py-3 border-2 border-[#E5E7EB] rounded-lg focus:outline-none focus:border-[#FACC15] focus:ring-2 focus:ring-[#FACC15]/20 text-base bg-[#F9FAFB] disabled:bg-[#F3F4F6] disabled:text-[#9CA3AF]"
-          required
-        />
       </div>
     );
   };
@@ -191,33 +177,40 @@ export default function QuizDetail({ quizId }: { quizId: number }) {
   const renderResult = () => {
     if (!result) return null;
 
-    const score = result.score || 0;
-    const total = quiz.questions?.length || 0;
-    const percentage = total > 0 ? Math.round((score / total) * 100) : 0;
+    console.log('채점 결과 데이터:', result);
+
+    // 백엔드에서 제공하는 데이터 사용
+    const correctCount = result.correct_count || 0;
+    const totalQuestions = result.total_questions || quiz.questions?.length || 0;
+    const accuracy = result.accuracy || 0; // 백분율
+    const accuracyDisplay = result.accuracy_display || `${correctCount}/${totalQuestions}`;
+    const detailedResults = result.results || [];
+
+    console.log('파싱된 채점 결과:', { correctCount, totalQuestions, accuracy, accuracyDisplay });
 
     return (
       <div className="bg-[#FFFFFF] p-6 rounded-xl shadow-sm border border-[#F3F4F6] space-y-4">
         <div className="text-center">
           <h3 className="text-xl font-bold text-[#000000] mb-2">채점 결과</h3>
           <div className="text-3xl font-bold text-[#FACC15] mb-2">
-            {score}/{total}
+            {accuracyDisplay}
           </div>
           <div className="text-lg text-[#374151]">
-            정답률: {percentage}%
+            정답률: {Math.round(accuracy)}%
           </div>
           
           {/* 성과에 따른 메시지 */}
           <div className="mt-4">
-            {percentage >= 90 && (
+            {accuracy >= 90 && (
               <div className="text-green-600 font-semibold">🎉 완벽합니다!</div>
             )}
-            {percentage >= 70 && percentage < 90 && (
+            {accuracy >= 70 && accuracy < 90 && (
               <div className="text-blue-600 font-semibold">👍 잘했습니다!</div>
             )}
-            {percentage >= 50 && percentage < 70 && (
+            {accuracy >= 50 && accuracy < 70 && (
               <div className="text-yellow-600 font-semibold">📚 조금 더 공부해보세요!</div>
             )}
-            {percentage < 50 && (
+            {accuracy < 50 && (
               <div className="text-red-600 font-semibold">💪 다시 한번 도전해보세요!</div>
             )}
           </div>
@@ -231,18 +224,22 @@ export default function QuizDetail({ quizId }: { quizId: number }) {
         )}
 
         {/* 상세 답안 표시 */}
-        {result.detailed_results && (
+        {detailedResults && detailedResults.length > 0 && (
           <div className="space-y-3">
             <h4 className="font-semibold text-[#000000]">상세 결과</h4>
-            {result.detailed_results.map((detail: any, idx: number) => (
-              <div key={`result-${idx}`} className={`p-3 rounded-lg border ${
-                detail.correct ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
+            {detailedResults.map((detail: any, idx: number) => (
+              <div key={`result-${detail.question_id || idx}`} className={`p-3 rounded-lg border ${
+                detail.is_correct ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
               }`}>
-                <div className="font-medium">
-                  {detail.correct ? '✅' : '❌'} 문제 {idx + 1}
+                <div className="font-medium text-sm text-gray-600 mb-1">
+                  문제 {idx + 1}: {detail.question_text}
                 </div>
-                <div className="text-sm text-gray-600">
-                  내 답: {detail.user_answer} | 정답: {detail.correct_answer}
+                <div className="font-medium">
+                  {detail.is_correct ? '✅ 정답' : '❌ 오답'}
+                </div>
+                <div className="text-sm text-gray-600 mt-1">
+                  <div>내 답: <span className="font-medium">{detail.user_answer || '미답변'}</span></div>
+                  <div>정답: <span className="font-medium text-green-600">{detail.correct_answer}</span></div>
                 </div>
               </div>
             ))}
@@ -338,19 +335,6 @@ export default function QuizDetail({ quizId }: { quizId: number }) {
         )}
       </div>
 
-      {/* 디버깅 정보 */}
-      <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
-        <p className="text-blue-700 font-medium">🔍 디버깅 정보:</p>
-        <p className="text-blue-600 text-sm">퀴즈 제목: {quiz.title}</p>
-        <p className="text-blue-600 text-sm">질문 개수: {quiz.questions?.length || 0}</p>
-        <p className="text-blue-600 text-sm">
-          첫 번째 질문: {quiz.questions?.[0]?.question_text || '없음'}
-        </p>
-        <p className="text-blue-600 text-sm">
-          첫 번째 질문 옵션: {JSON.stringify(quiz.questions?.[0]?.options) || '없음'}
-        </p>
-      </div>
-
       {/* 퀴즈 폼 */}
       <form
         onSubmit={(e) => {
@@ -369,17 +353,11 @@ export default function QuizDetail({ quizId }: { quizId: number }) {
               <h3 className="text-lg font-semibold text-[#000000] leading-relaxed">
                 {questionIndex + 1}. {question.question_text || question.question || question.text}
               </h3>
-              <div className="text-xs text-[#9CA3AF] mt-1">
-                {question.question_type === 'multiple_choice' || question.type === 'multiple_choice' ? '객관식' : '단답형'}
-              </div>
             </div>
 
-            {/* 답변 영역 */}
+            {/* 답변 영역 - 모든 문제가 객관식 */}
             <div className="pt-2">
-              {(question.question_type === 'multiple_choice' || question.type === 'multiple_choice')
-                ? renderMultipleChoice(question, questionIndex)
-                : renderShortAnswer(question, questionIndex)
-              }
+              {renderMultipleChoice(question, questionIndex)}
             </div>
           </div>
         ))}
@@ -391,7 +369,7 @@ export default function QuizDetail({ quizId }: { quizId: number }) {
               type="submit"
               className="px-8 py-3 bg-[#FACC15] text-[#000000] rounded-lg font-bold text-lg hover:bg-[#F59E0B] transition-colors shadow-sm"
             >
-              제출
+              퀴즈 제출하기
             </button>
           </div>
         )}
