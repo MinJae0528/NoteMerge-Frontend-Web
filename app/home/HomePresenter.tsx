@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useMemo } from "react";
 
-// 키워드 타입 정의
+// 키워드 타입 정의 - source 필드 추가
 interface Keyword {
   keyword_id: number;
   word: string;
@@ -38,52 +38,35 @@ export default function HomePresenter() {
     return selected.note_id || selected.id || null;
   }, [selected]);
 
-  // 키워드 목록 새로고침 함수
+  // 키워드 목록 새로고침 함수 - 노트 상세 API 사용으로 수정
   const refreshKeywords = async (noteId: number) => {
     try {
-      console.log('🔄 키워드 새로고침 시작:', noteId);
-      const keywordResponse = await fetch(`http://localhost:3000/api/keywords?note_id=${noteId}`, {
+      console.log('🔄 키워드 새로고침 시작 (노트 상세 API 사용):', noteId);
+      const noteResponse = await fetch(`http://localhost:3000/api/notes/${noteId}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
       });
       
-      console.log('🔄 키워드 응답 상태:', keywordResponse.status);
+      console.log('🔄 노트 상세 응답 상태:', noteResponse.status);
       
-      if (keywordResponse.ok) {
-        const keywordData = await keywordResponse.json();
-        console.log('🔄 새로고침된 키워드 전체 응답:', keywordData);
+      if (noteResponse.ok) {
+        const noteData = await noteResponse.json();
+        console.log('🔄 노트 상세 전체 응답:', noteData);
         
-        // 백엔드 응답 구조 확인 및 처리
-        let keywordList = [];
-        
-        if (keywordData?.data?.keywords && Array.isArray(keywordData.data.keywords)) {
-          // 구조: { success: true, data: { keywords: [...] } }
-          keywordList = keywordData.data.keywords;
-        } else if (keywordData?.data && Array.isArray(keywordData.data)) {
-          // 구조: { success: true, data: [...] }
-          keywordList = keywordData.data;
-        } else if (Array.isArray(keywordData?.keywords)) {
-          // 구조: { keywords: [...] }
-          keywordList = keywordData.keywords;
-        } else if (Array.isArray(keywordData)) {
-          // 구조: [...]
-          keywordList = keywordData;
+        if (noteData.success && noteData.data && noteData.data.note && noteData.data.note.keywords) {
+          // name -> word 필드 매핑 및 source 설정
+          const mappedKeywords = noteData.data.note.keywords.map((kw: any) => ({
+            keyword_id: kw.keyword_id,
+            word: kw.name || kw.word, // name 필드를 word로 매핑
+            source: kw.source || 'ai' // AI 생성 키워드로 기본 설정
+          }));
+          console.log('🔄 매핑된 키워드 목록:', mappedKeywords);
+          setKeywords(mappedKeywords);
+        } else {
+          console.warn('❌ 키워드 데이터가 없음:', noteData);
+          setKeywords([]);
         }
-        
-        console.log('🔄 원본 키워드 리스트:', keywordList);
-        
-        const cleanedKeywords = keywordList.map((kw: any) => ({
-          ...kw,
-          word: typeof kw.word === 'string' ? 
-                kw.word.replace(/^\d+:\s*/, '').trim() : // "1: 키워드" -> "키워드"
-                kw.word
-        }));
-        
-        console.log('🔄 정리된 키워드 목록:', cleanedKeywords);
-        setKeywords(cleanedKeywords);
       } else {
-        console.error('❌ 키워드 조회 실패:', keywordResponse.status);
-        const errorText = await keywordResponse.text();
-        console.error('❌ 키워드 조회 에러 내용:', errorText);
+        console.error('❌ 노트 상세 조회 실패:', noteResponse.status);
         setKeywords([]);
       }
     } catch (error) {
@@ -92,7 +75,7 @@ export default function HomePresenter() {
     }
   };
 
-  // 선택 파일 상세 정보 불러오기
+  // 선택 파일 상세 정보 불러오기 - 단일 API 호출로 수정
   useEffect(() => {
     if (!selectedNoteId) {
       console.log('❌ 선택된 노트 ID가 없음');
@@ -103,69 +86,43 @@ export default function HomePresenter() {
     
     console.log('🔄 선택된 노트 ID:', selectedNoteId);
     
-    // 노트 상세 정보와 키워드를 함께 불러오기
-    Promise.all([
-      // 노트 상세 정보
-      fetch(`http://localhost:3000/api/notes/${selectedNoteId}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
-      }),
-      // 해당 노트의 키워드 목록
-      fetch(`http://localhost:3000/api/keywords?note_id=${selectedNoteId}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
-      })
-    ])
-      .then(async ([noteRes, keywordRes]) => {
+    // 노트 상세 정보만 불러오기 (키워드 포함)
+    fetch(`http://localhost:3000/api/notes/${selectedNoteId}`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
+    })
+      .then(async (noteRes) => {
         console.log('🔄 노트 응답 상태:', noteRes.status);
-        console.log('🔄 키워드 응답 상태:', keywordRes.status);
         
         const noteData = await noteRes.json();
         console.log('🔄 노트 상세 데이터:', noteData);
         
-        const note = noteData?.data?.note;
-        if (note) {
+        // 노트 데이터 처리 - files 배열 및 키워드 포함
+        if (noteData.success && noteData.data && noteData.data.note) {
+          const note = noteData.data.note;
           setSummary(note.summary || "");
-          setSelected(prev => ({ ...prev, ...note }));
-        }
-        
-        // 키워드 응답 처리
-        if (keywordRes.ok) {
-          const keywordData = await keywordRes.json();
-          console.log('🔄 키워드 전체 응답:', keywordData);
           
-          // 백엔드 응답 구조 확인 및 처리
-          let keywordList = [];
-          
-          if (keywordData?.data?.keywords && Array.isArray(keywordData.data.keywords)) {
-            // 구조: { success: true, data: { keywords: [...] } }
-            keywordList = keywordData.data.keywords;
-          } else if (keywordData?.data && Array.isArray(keywordData.data)) {
-            // 구조: { success: true, data: [...] }
-            keywordList = keywordData.data;
-          } else if (Array.isArray(keywordData?.keywords)) {
-            // 구조: { keywords: [...] }
-            keywordList = keywordData.keywords;
-          } else if (Array.isArray(keywordData)) {
-            // 구조: [...]
-            keywordList = keywordData;
-          }
-          
-          console.log('🔄 원본 키워드 리스트:', keywordList);
-          
-          const cleanedKeywords = keywordList.map((kw: any) => ({
-            ...kw,
-            word: typeof kw.word === 'string' ? 
-                  kw.word.replace(/^\d+:\s*/, '').trim() : // "1: 키워드" -> "키워드"
-                  kw.word
+          // 파일 정보를 포함하여 selected 업데이트
+          setSelected(prev => ({ 
+            ...prev, 
+            ...note,
+            files: note.files || []
           }));
+          console.log('🔄 업데이트된 노트 정보:', note);
+          console.log('🔄 첨부 파일 정보:', note.files);
           
-          console.log('🔄 정리된 키워드 목록:', cleanedKeywords);
-          console.log('🔄 키워드 개수:', cleanedKeywords.length);
-          setKeywords(cleanedKeywords);
-        } else {
-          console.error('❌ 키워드 조회 실패:', keywordRes.status);
-          const errorText = await keywordRes.text();
-          console.error('❌ 키워드 조회 에러 내용:', errorText);
-          setKeywords([]);
+          // 키워드 처리 - name -> word 필드 매핑
+          if (note.keywords && Array.isArray(note.keywords)) {
+            const mappedKeywords = note.keywords.map((kw: any) => ({
+              keyword_id: kw.keyword_id,
+              word: kw.name || kw.word, // name 필드를 word로 매핑
+              source: kw.source || 'ai' // AI 생성 키워드로 기본 설정
+            }));
+            console.log('🔄 매핑된 키워드 목록:', mappedKeywords);
+            setKeywords(mappedKeywords);
+          } else {
+            console.warn('❌ 키워드 배열이 없음');
+            setKeywords([]);
+          }
         }
       })
       .catch(error => {
@@ -177,15 +134,16 @@ export default function HomePresenter() {
 
   // 현재 상태 디버깅 로그
   useEffect(() => {
-    console.log('🔍 현재 키워드 상태:', {
+    console.log('🔍 현재 상태:', {
       keywords,
       keywordsLength: keywords.length,
       selectedNoteId,
-      selected: selected?.title
+      selected: selected?.title,
+      files: selected?.files
     });
   }, [keywords, selectedNoteId, selected]);
 
-  // 키워드 추가 - API 스펙에 맞춰 수정
+  // 키워드 추가
   const handleAddKeyword = async () => {
     if (!newKeyword.trim()) {
       console.log('❌ 키워드가 비어있습니다');
@@ -193,14 +151,8 @@ export default function HomePresenter() {
       return;
     }
     
-    // 정리된 키워드로 중복 체크
     const cleanedInput = newKeyword.trim();
-    if (keywords.some(kw => {
-      const cleanedWord = typeof kw.word === 'string' ? 
-                         kw.word.replace(/^\d+:\s*/, '').trim() : 
-                         kw.word;
-      return cleanedWord === cleanedInput;
-    })) {
+    if (keywords.some(kw => kw.word === cleanedInput)) {
       console.log('❌ 이미 존재하는 키워드입니다:', cleanedInput);
       alert('이미 존재하는 키워드입니다.');
       return;
@@ -214,12 +166,10 @@ export default function HomePresenter() {
     
     console.log('➕ 키워드 추가 시도:', { 
       keyword: cleanedInput, 
-      noteId: selectedNoteId,
-      currentKeywords: keywords 
+      noteId: selectedNoteId
     });
     
     try {
-      // API 스펙에 맞는 키워드 추가 요청
       const response = await fetch('http://localhost:3000/api/keywords', {
         method: 'POST',
         headers: {
@@ -228,7 +178,7 @@ export default function HomePresenter() {
         },
         body: JSON.stringify({ 
           note_id: selectedNoteId,
-          word: cleanedInput  // 정리된 키워드 사용
+          word: cleanedInput
         })
       });
       
@@ -237,10 +187,8 @@ export default function HomePresenter() {
       console.log('➕ 키워드 추가 응답 데이터:', result);
       
       if (response.ok && result.success) {
-        // 키워드 목록 새로고침 - 반드시 실행되도록 수정
         console.log('✅ 키워드 추가 성공, 목록 새로고침 시작');
         await refreshKeywords(selectedNoteId);
-        
         setNewKeyword("");
         console.log('✅ 키워드 추가 완료');
         alert('키워드가 추가되었습니다.');
@@ -254,18 +202,16 @@ export default function HomePresenter() {
     }
   };
 
-  // 키워드 삭제 - API 스펙에 맞춰 수정
+  // 키워드 삭제
   const handleRemoveKeyword = async (idx: number) => {
     const keyword = keywords[idx];
     console.log('🗑️ 키워드 삭제 시도:', { 
       keyword, 
       index: idx, 
-      noteId: selectedNoteId,
-      currentKeywords: keywords 
+      noteId: selectedNoteId
     });
     
     try {
-      // API 스펙에 맞는 삭제 엔드포인트 사용
       const deleteUrl = `http://localhost:3000/api/keywords/${keyword.keyword_id}?note_id=${selectedNoteId}`;
       console.log('🗑️ 삭제 요청 URL:', deleteUrl);
       
@@ -281,10 +227,8 @@ export default function HomePresenter() {
       console.log('🗑️ 삭제 응답 데이터:', result);
       
       if (response.ok && result.success) {
-        // 키워드 목록 새로고침
         console.log('✅ 키워드 삭제 성공, 목록 새로고침 시작');
         await refreshKeywords(selectedNoteId as number);
-        
         console.log('✅ 키워드 삭제 완료');
         alert('키워드가 삭제되었습니다.');
       } else {
@@ -313,50 +257,128 @@ export default function HomePresenter() {
     setPage(1);
   };
 
-  // 파일 미리보기 렌더링
+  // 파일 미리보기 렌더링 - files 배열 사용하도록 수정
   const renderFilePreview = () => {
     if (!selected) return <div className="flex items-center justify-center h-[500px] text-[#374151]">파일을 선택해주세요</div>;
 
-    if (selected.file_type?.startsWith('image/')) {
+    console.log('🔍 파일 미리보기 렌더링:', {
+      files: selected.files,
+      filesLength: selected.files?.length
+    });
+
+    // files 배열에서 첫 번째 파일 사용 (추후 여러 파일 지원 확장 가능)
+    const attachedFiles = selected.files || [];
+    
+    if (attachedFiles.length === 0) {
+      // 첨부 파일이 없으면 텍스트 내용 표시
       return (
-        <img 
-          src={selected.storage_url || selected.url} 
-          alt={selected.title} 
-          className="max-w-full max-h-[500px] mx-auto object-contain rounded-lg" 
-        />
+        <div className="bg-[#F3F4F6] p-6 rounded-lg max-h-[500px] overflow-auto">
+          <pre className="whitespace-pre-wrap text-sm text-[#374151]">
+            {selected.content || selected.summary || "내용이 없습니다."}
+          </pre>
+        </div>
       );
     }
-    
-    if (selected.file_type === 'application/pdf') {
+
+    // 첫 번째 첨부 파일 표시
+    const firstFile = attachedFiles[0];
+    const fileUrl = firstFile.fileUrl;
+    const fileType = firstFile.fileType;
+
+    console.log('🔍 표시할 파일:', {
+      fileUrl,
+      fileType,
+      fileName: firstFile.fileName
+    });
+
+    // 이미지 파일 처리
+    if (fileType?.startsWith('image')) {
       return (
-        <div className="flex flex-col items-center justify-center bg-[#F3F4F6] rounded-lg h-[500px]">
-          <span className="text-lg text-[#374151] mb-4">PDF 미리보기</span>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="px-3 py-1 rounded bg-[#9CA3AF] text-[#FFFFFF] disabled:opacity-50 hover:bg-[#374151] transition-colors"
-            >
-              이전
-            </button>
-            <span className="px-2 text-[#374151]">{page} / {totalPages}</span>
-            <button
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
-              className="px-3 py-1 rounded bg-[#9CA3AF] text-[#FFFFFF] disabled:opacity-50 hover:bg-[#374151] transition-colors"
-            >
-              다음
-            </button>
-          </div>
+        <div className="space-y-4">
+          <img 
+            src={fileUrl} 
+            alt={selected.title} 
+            className="max-w-full max-h-[500px] mx-auto object-contain rounded-lg" 
+            onError={(e) => {
+              console.error('이미지 로드 실패:', fileUrl);
+              e.currentTarget.style.display = 'none';
+            }}
+          />
+          {attachedFiles.length > 1 && (
+            <div className="text-sm text-[#9CA3AF] text-center">
+              총 {attachedFiles.length}개의 파일이 첨부되어 있습니다.
+            </div>
+          )}
         </div>
       );
     }
     
+    // PDF 파일 처리 - 새 탭으로 열기 방식
+    if (fileType === 'pdf' || fileType === 'application/pdf') {
+      return (
+        <div className="space-y-4">
+          <div className="bg-[#F3F4F6] p-8 rounded-lg text-center">
+            <div className="space-y-4">
+              <div className="text-6xl">📄</div>
+              <div>
+                <h3 className="text-lg font-semibold text-[#374151] mb-2">PDF 파일</h3>
+                <p className="text-sm text-[#9CA3AF] mb-4">{firstFile.fileName}</p>
+              </div>
+              <div className="space-y-2">
+                <a
+                  href={fileUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-block px-6 py-3 bg-[#FACC15] text-[#000000] rounded-lg hover:bg-[#F59E0B] transition-colors font-semibold"
+                >
+                  📖 새 탭에서 보기
+                </a>
+                <br />
+                <a
+                  href={fileUrl}
+                  download={firstFile.fileName}
+                  className="inline-block px-4 py-2 bg-[#374151] text-[#FFFFFF] rounded-lg hover:bg-[#000000] transition-colors text-sm"
+                >
+                  💾 다운로드
+                </a>
+              </div>
+            </div>
+          </div>
+          {attachedFiles.length > 1 && (
+            <div className="text-sm text-[#9CA3AF] text-center">
+              총 {attachedFiles.length}개의 파일이 첨부되어 있습니다.
+            </div>
+          )}
+        </div>
+      );
+    }
+    
+    // 기타 파일 타입 - 다운로드 링크와 함께 텍스트 내용 표시
     return (
-      <div className="bg-[#F3F4F6] p-6 rounded-lg max-h-[500px] overflow-auto">
-        <pre className="whitespace-pre-wrap text-sm text-[#374151]">
-          {selected.content || selected.summary || "내용이 없습니다."}
-        </pre>
+      <div className="space-y-4">
+        <div className="bg-[#F3F4F6] p-4 rounded-lg">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-sm font-medium text-[#374151]">첨부 파일:</span>
+            <a 
+              href={fileUrl} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-[#FACC15] hover:text-[#F59E0B] text-sm underline"
+            >
+              {firstFile.fileName}
+            </a>
+          </div>
+          {attachedFiles.length > 1 && (
+            <div className="text-sm text-[#9CA3AF]">
+              총 {attachedFiles.length}개의 파일이 첨부되어 있습니다.
+            </div>
+          )}
+        </div>
+        <div className="bg-[#F3F4F6] p-6 rounded-lg max-h-[500px] overflow-auto">
+          <pre className="whitespace-pre-wrap text-sm text-[#374151]">
+            {selected.content || selected.summary || "내용이 없습니다."}
+          </pre>
+        </div>
       </div>
     );
   };
@@ -420,24 +442,26 @@ export default function HomePresenter() {
             {keywords.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {keywords.map((kw, idx) => {
-                  // 키워드 표시 시에도 불필요한 접두사 제거
-                  const displayWord = typeof kw.word === 'string' ? 
-                                     kw.word.replace(/^\d+:\s*/, '').trim() : 
-                                     kw.word;
+                  console.log('🏷️ 키워드 렌더링:', { word: kw.word, idx, keyword_id: kw.keyword_id, source: kw.source });
                   
-                  console.log('🏷️ 키워드 렌더링:', { original: kw.word, display: displayWord, idx, keyword_id: kw.keyword_id });
+                  // AI 생성 키워드와 사용자 추가 키워드 구분
+                  const isAI = kw.source === 'ai';
+                  const bgColor = isAI ? 'bg-[#FACC15]' : 'bg-[#9CA3AF]';
+                  const textColor = isAI ? 'text-[#000000]' : 'text-[#FFFFFF]';
+                  const icon = isAI ? '🤖' : '👤';
                   
                   return (
                     <span 
                       key={`${kw.keyword_id}-${idx}`} 
-                      className="bg-[#9CA3AF] text-[#FFFFFF] px-3 py-1 rounded-full flex items-center gap-2 text-sm whitespace-nowrap"
+                      className={`${bgColor} ${textColor} px-3 py-1 rounded-full flex items-center gap-2 text-sm whitespace-nowrap`}
                     >
-                      <span className="truncate max-w-[80px]" title={displayWord}>
-                        {displayWord}
+                      <span className="text-xs">{icon}</span>
+                      <span className="truncate max-w-[80px]" title={kw.word}>
+                        {kw.word}
                       </span>
                       <button
                         onClick={() => handleRemoveKeyword(idx)}
-                        className="text-[#FFFFFF] hover:text-[#F87171] transition-colors flex-shrink-0"
+                        className={`${textColor} hover:text-[#F87171] transition-colors flex-shrink-0`}
                         type="button"
                         title="키워드 삭제"
                       >
@@ -470,7 +494,7 @@ export default function HomePresenter() {
               <button
                 onClick={handleAddKeyword}
                 disabled={!selectedNoteId}
-                className="w-full py-2 rounded-lg bg-[#374151] text-[#FFFFFF] font-medium hover:bg-[#000000] transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full py-2 rounded-lg bg-[#374151] text-[#FFFFFF] font-medium hover:bg-[#FACC15] transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 type="button"
               >
                 추가

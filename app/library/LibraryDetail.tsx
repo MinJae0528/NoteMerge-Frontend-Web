@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 
 export default function LibraryDetail({ noteId }: { noteId: number }) {
   const [detail, setDetail] = useState<any>(null);
-  const [keywords, setKeywords] = useState<string[]>([]);
+  const [keywords, setKeywords] = useState<any[]>([]);
   const [newKeyword, setNewKeyword] = useState("");
   const [isCreatingQuiz, setIsCreatingQuiz] = useState(false);
   const router = useRouter();
@@ -21,33 +21,18 @@ export default function LibraryDetail({ noteId }: { noteId: number }) {
         const keywordData = await keywordResponse.json();
         console.log('자료 상세 - 새로고침된 키워드 데이터:', keywordData);
         
-        // 백엔드 응답 구조 확인 및 처리 (홈화면과 동일한 로직)
-        let keywordList = [];
-        
-        if (keywordData?.data?.keywords && Array.isArray(keywordData.data.keywords)) {
-          keywordList = keywordData.data.keywords;
-        } else if (keywordData?.data && Array.isArray(keywordData.data)) {
-          keywordList = keywordData.data;
-        } else if (Array.isArray(keywordData?.keywords)) {
-          keywordList = keywordData.keywords;
-        } else if (Array.isArray(keywordData)) {
-          keywordList = keywordData;
+        // 단순화된 키워드 처리
+        if (keywordData.success && Array.isArray(keywordData.data)) {
+          const cleanedKeywords = keywordData.data.map((kw: any) => ({
+            ...kw,
+            word: kw.word.trim()
+          }));
+          console.log('자료 상세 - 정리된 키워드 목록:', cleanedKeywords);
+          setKeywords(cleanedKeywords);
+        } else {
+          console.warn('❌ 예상과 다른 키워드 응답 구조:', keywordData);
+          setKeywords([]);
         }
-        
-        console.log('자료 상세 - 원본 키워드 리스트:', keywordList);
-        
-        // 키워드 데이터 정리 (불필요한 접두사 제거)
-        const cleanedKeywords = keywordList.map((kw: any) => {
-          if (typeof kw === 'string') {
-            return kw.replace(/^\d+:\s*/, '').trim(); // "1: 키워드" -> "키워드"
-          } else if (kw.word) {
-            return kw.word.replace(/^\d+:\s*/, '').trim();
-          }
-          return kw;
-        });
-        
-        console.log('자료 상세 - 정리된 키워드 목록:', cleanedKeywords);
-        setKeywords(cleanedKeywords);
       } else {
         console.error('자료 상세 - 키워드 조회 실패:', keywordResponse.status);
         setKeywords([]);
@@ -77,38 +62,25 @@ export default function LibraryDetail({ noteId }: { noteId: number }) {
         console.log('자료 상세 - 노트 데이터:', noteData);
         const note = noteData?.data?.note || noteData?.data;
         setDetail(note);
+        console.log('자료 상세 - 첨부 파일 정보:', note?.files);
         
         // 키워드 처리
         if (keywordRes.ok) {
           const keywordData = await keywordRes.json();
           console.log('자료 상세 - 키워드 데이터:', keywordData);
           
-          // 백엔드 응답 구조 확인 및 처리 (홈화면과 동일한 로직)
-          let keywordList = [];
-          
-          if (keywordData?.data?.keywords && Array.isArray(keywordData.data.keywords)) {
-            keywordList = keywordData.data.keywords;
-          } else if (keywordData?.data && Array.isArray(keywordData.data)) {
-            keywordList = keywordData.data;
-          } else if (Array.isArray(keywordData?.keywords)) {
-            keywordList = keywordData.keywords;
-          } else if (Array.isArray(keywordData)) {
-            keywordList = keywordData;
+          // 단순화된 키워드 처리
+          if (keywordData.success && Array.isArray(keywordData.data)) {
+            const cleanedKeywords = keywordData.data.map((kw: any) => ({
+              ...kw,
+              word: kw.word.trim()
+            }));
+            console.log('자료 상세 - 정리된 키워드 목록:', cleanedKeywords);
+            setKeywords(cleanedKeywords);
+          } else {
+            console.warn('❌ 예상과 다른 키워드 응답 구조:', keywordData);
+            setKeywords([]);
           }
-          
-          console.log('자료 상세 - 원본 키워드 리스트:', keywordList);
-          
-          const cleanedKeywords = keywordList.map((kw: any) => {
-            if (typeof kw === 'string') {
-              return kw.replace(/^\d+:\s*/, '').trim(); // "1: 키워드" -> "키워드"
-            } else if (kw.word) {
-              return kw.word.replace(/^\d+:\s*/, '').trim();
-            }
-            return kw;
-          });
-          
-          console.log('자료 상세 - 정리된 키워드 목록:', cleanedKeywords);
-          setKeywords(cleanedKeywords);
         } else {
           console.error('자료 상세 - 키워드 조회 실패:', keywordRes.status);
           setKeywords([]);
@@ -165,10 +137,7 @@ export default function LibraryDetail({ noteId }: { noteId: number }) {
     
     // 정리된 키워드로 중복 체크
     const cleanedInput = newKeyword.trim();
-    if (keywords.some(kw => {
-      const cleanedKw = typeof kw === 'string' ? kw.replace(/^\d+:\s*/, '').trim() : kw;
-      return cleanedKw === cleanedInput;
-    })) {
+    if (keywords.some(kw => kw.word === cleanedInput)) {
       console.log('자료 상세 - 이미 존재하는 키워드:', cleanedInput);
       alert('이미 존재하는 키워드입니다.');
       return;
@@ -226,42 +195,8 @@ export default function LibraryDetail({ noteId }: { noteId: number }) {
     });
     
     try {
-      // 먼저 키워드 목록을 조회해서 keyword_id를 찾기
-      const keywordResponse = await fetch(`http://localhost:3000/api/keywords?note_id=${noteId}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
-      });
-      
-      if (!keywordResponse.ok) {
-        throw new Error('키워드 목록을 가져올 수 없습니다.');
-      }
-      
-      const keywordData = await keywordResponse.json();
-      
-      // 백엔드 응답 구조 확인 및 처리 (홈화면과 동일한 로직)
-      let keywordList = [];
-      
-      if (keywordData?.data?.keywords && Array.isArray(keywordData.data.keywords)) {
-        keywordList = keywordData.data.keywords;
-      } else if (keywordData?.data && Array.isArray(keywordData.data)) {
-        keywordList = keywordData.data;
-      } else if (Array.isArray(keywordData?.keywords)) {
-        keywordList = keywordData.keywords;
-      } else if (Array.isArray(keywordData)) {
-        keywordList = keywordData;
-      }
-      
-      // 현재 키워드와 일치하는 항목 찾기
-      const foundKeyword = keywordList.find((kw: any) => {
-        const cleanedKw = typeof kw.word === 'string' ? kw.word.replace(/^\d+:\s*/, '').trim() : kw.word;
-        return cleanedKw === keyword;
-      });
-      
-      if (!foundKeyword) {
-        throw new Error('삭제할 키워드를 찾을 수 없습니다.');
-      }
-      
       // API 스펙에 맞는 삭제 요청
-      const deleteUrl = `http://localhost:3000/api/keywords/${foundKeyword.keyword_id}?note_id=${noteId}`;
+      const deleteUrl = `http://localhost:3000/api/keywords/${keyword.keyword_id}?note_id=${noteId}`;
       console.log('자료 상세 - 삭제 요청 URL:', deleteUrl);
       
       const response = await fetch(deleteUrl, {
@@ -291,6 +226,127 @@ export default function LibraryDetail({ noteId }: { noteId: number }) {
     }
   };
 
+  // 파일 미리보기 렌더링 함수 - files 배열 사용
+  const renderFilePreview = () => {
+    if (!detail) return <div className="p-8 text-center text-[#374151]">로딩 중...</div>;
+
+    const attachedFiles = detail.files || [];
+    
+    console.log('🔍 자료 상세 - 파일 미리보기:', {
+      files: attachedFiles,
+      filesLength: attachedFiles.length
+    });
+
+    if (attachedFiles.length === 0) {
+      // 첨부 파일이 없으면 텍스트 내용 표시
+      return (
+        <pre className="bg-[#F3F4F6] p-6 rounded-lg text-base max-h-[500px] overflow-auto whitespace-pre-wrap text-[#374151]">
+          {detail.content || "내용이 없습니다."}
+        </pre>
+      );
+    }
+
+    // 첫 번째 첨부 파일 표시
+    const firstFile = attachedFiles[0];
+    const fileUrl = firstFile.fileUrl;
+    const fileType = firstFile.fileType;
+
+    console.log('🔍 표시할 파일:', {
+      fileUrl,
+      fileType,
+      fileName: firstFile.fileName
+    });
+
+    // 이미지 파일 처리
+    if (fileType?.startsWith('image')) {
+      return (
+        <div className="space-y-4">
+          <img 
+            src={fileUrl} 
+            alt={detail.title} 
+            className="max-w-full max-h-[500px] mx-auto rounded-lg object-contain" 
+            onError={(e) => {
+              console.error('이미지 로드 실패:', fileUrl);
+              e.currentTarget.style.display = 'none';
+            }}
+          />
+          {attachedFiles.length > 1 && (
+            <div className="text-sm text-[#9CA3AF] text-center">
+              총 {attachedFiles.length}개의 파일이 첨부되어 있습니다.
+            </div>
+          )}
+        </div>
+      );
+    }
+    
+    // PDF 파일 처리 - 새 탭으로 열기 방식
+    if (fileType === 'pdf' || fileType === 'application/pdf') {
+      return (
+        <div className="space-y-4">
+          <div className="bg-[#F3F4F6] p-8 rounded-lg text-center">
+            <div className="space-y-4">
+              <div className="text-6xl">📄</div>
+              <div>
+                <h3 className="text-lg font-semibold text-[#374151] mb-2">PDF 파일</h3>
+                <p className="text-sm text-[#9CA3AF] mb-4">{firstFile.fileName}</p>
+              </div>
+              <div className="space-y-2">
+                <a
+                  href={fileUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-block px-6 py-3 bg-[#FACC15] text-[#000000] rounded-lg hover:bg-[#F59E0B] transition-colors font-semibold"
+                >
+                  📖 새 탭에서 보기
+                </a>
+                <br />
+                <a
+                  href={fileUrl}
+                  download={firstFile.fileName}
+                  className="inline-block px-4 py-2 bg-[#374151] text-[#FFFFFF] rounded-lg hover:bg-[#000000] transition-colors text-sm"
+                >
+                  💾 다운로드
+                </a>
+              </div>
+            </div>
+          </div>
+          {attachedFiles.length > 1 && (
+            <div className="text-sm text-[#9CA3AF] text-center">
+              총 {attachedFiles.length}개의 파일이 첨부되어 있습니다.
+            </div>
+          )}
+        </div>
+      );
+    }
+    
+    // 기타 파일 타입 - 다운로드 링크와 함께 텍스트 내용 표시
+    return (
+      <div className="space-y-4">
+        <div className="bg-[#F3F4F6] p-4 rounded-lg">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-sm font-medium text-[#374151]">첨부 파일:</span>
+            <a 
+              href={fileUrl} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-[#FACC15] hover:text-[#F59E0B] text-sm underline"
+            >
+              {firstFile.fileName}
+            </a>
+          </div>
+          {attachedFiles.length > 1 && (
+            <div className="text-sm text-[#9CA3AF]">
+              총 {attachedFiles.length}개의 파일이 첨부되어 있습니다.
+            </div>
+          )}
+        </div>
+        <pre className="bg-[#F3F4F6] p-6 rounded-lg text-base max-h-[500px] overflow-auto whitespace-pre-wrap text-[#374151]">
+          {detail.content || "내용이 없습니다."}
+        </pre>
+      </div>
+    );
+  };
+
   if (!detail) return <div className="p-8 text-center text-[#374151]">로딩 중...</div>;
 
   return (
@@ -316,19 +372,7 @@ export default function LibraryDetail({ noteId }: { noteId: number }) {
         <main className="flex-1 space-y-6">
           <section className="bg-[#FFFFFF] p-6 rounded-xl shadow-sm border border-[#F3F4F6] space-y-4">
             <h2 className="text-lg font-bold mb-2 text-[#000000]">{detail.title}</h2>
-            {detail.file_type?.startsWith('image/') && (
-              <img src={detail.storage_url} alt={detail.title} className="max-w-full max-h-[500px] mx-auto rounded-lg" />
-            )}
-            {detail.file_type === 'application/pdf' && (
-              <div className="flex items-center justify-center bg-[#F3F4F6] rounded-lg h-[500px]">
-                <span className="text-lg text-[#374151]">PDF 미리보기</span>
-              </div>
-            )}
-            {!detail.file_type?.startsWith('image/') && detail.file_type !== 'application/pdf' && (
-              <pre className="bg-[#F3F4F6] p-6 rounded-lg text-base max-h-[500px] overflow-auto whitespace-pre-wrap text-[#374151]">
-                {detail.content || "내용이 없습니다."}
-              </pre>
-            )}
+            {renderFilePreview()}
           </section>
 
           <section className="bg-[#FFFFFF] p-6 rounded-xl shadow-sm border border-[#F3F4F6] space-y-4">
@@ -345,17 +389,14 @@ export default function LibraryDetail({ noteId }: { noteId: number }) {
             <h3 className="text-lg font-bold mb-4 text-[#000000]">키워드 ({keywords.length}개)</h3>
             <div className="flex flex-wrap gap-2 mb-4 min-h-[50px]">
               {keywords.map((kw, idx) => {
-                // 키워드 표시 시에도 불필요한 접두사 제거
-                const displayWord = typeof kw === 'string' ? kw.replace(/^\d+:\s*/, '').trim() : kw;
-                
                 return (
                   <span 
-                    key={`${displayWord}-${idx}`} 
+                    key={`${kw.keyword_id}-${idx}`} 
                     className="bg-[#9CA3AF] text-[#FFFFFF] px-4 py-1.5 rounded-full flex items-center gap-2 text-sm whitespace-nowrap"
                     style={{ minWidth: '60px', borderRadius: '20px' }}
                   >
-                    <span title={displayWord} className="leading-none">
-                      {displayWord}
+                    <span title={kw.word} className="leading-none">
+                      {kw.word}
                     </span>
                     <button
                       onClick={() => handleRemoveKeyword(idx)}
