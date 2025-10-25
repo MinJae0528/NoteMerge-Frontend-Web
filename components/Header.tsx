@@ -1,10 +1,29 @@
 "use client";
 
 import Link from "next/link";
-import { useAuth } from "../context/AuthContext";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 export function Header() {
-  const { isLoggedIn, login, logout } = useAuth();
+  const router = useRouter();
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  // 로그인 상태 확인
+  useEffect(() => {
+    setIsLoggedIn(!!localStorage.getItem("token"));
+  }, []);
+
+  // 로그인 페이지 이동
+  const handleLogin = () => {
+    router.push("/login");
+  };
+
+  // 로그아웃 처리
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    setIsLoggedIn(false);
+    router.push("/login");
+  };
 
   return (
     <header className="bg-white border-b border-gray-200">
@@ -28,7 +47,7 @@ export function Header() {
             <>
               <NavButton to="/myinfo" label="내 정보" />
               <button
-                onClick={logout}
+                onClick={handleLogout}
                 className="px-3 py-2 rounded-md text-sm text-red-500 hover:bg-gray-100"
               >
                 로그아웃
@@ -36,7 +55,7 @@ export function Header() {
             </>
           ) : (
             <button
-              onClick={login}
+              onClick={handleLogin}
               className="px-3 py-2 rounded-md text-sm text-blue-500 hover:bg-gray-100"
             >
               로그인

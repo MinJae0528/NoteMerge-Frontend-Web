@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
 type AuthContextType = {
   isLoggedIn: boolean;
@@ -13,8 +13,23 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
-  const login = () => setIsLoggedIn(true);
-  const logout = () => setIsLoggedIn(false);
+  // 새로고침 시에도 localStorage의 token을 확인
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setIsLoggedIn(!!localStorage.getItem("token"));
+    }
+  }, []);
+
+  const login = () => {
+    setIsLoggedIn(true);
+  };
+
+  const logout = () => {
+    setIsLoggedIn(false);
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("token");
+    }
+  };
 
   return (
     <AuthContext.Provider value={{ isLoggedIn, login, logout }}>
