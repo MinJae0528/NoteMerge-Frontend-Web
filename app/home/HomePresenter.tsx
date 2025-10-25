@@ -360,61 +360,69 @@ export default function HomePresenter() {
   };
 
   return (
-    <div className="flex max-w-6xl mx-auto px-6 py-8 gap-8 bg-[#FFFFFF]">
-      {/* 왼쪽: 내 자료 리스트 */}
-      <aside className="w-1/4 space-y-4">
-        <h2 className="text-lg font-bold mb-2 text-[#000000]">내 자료</h2>
-        <ul className="space-y-2">
-          {files.map((file) => {
-            const fileNoteId = file.note_id || file.id;
-            const currentNoteId = selected?.note_id || selected?.id;
-            const isSelected = fileNoteId === currentNoteId;
-            
-            return (
-              <li key={fileNoteId}>
-                <button
-                  className={`w-full text-left p-3 rounded-lg transition-colors ${
-                    isSelected
-                      ? "bg-[#FACC15]/20 border border-[#FACC15] font-semibold"
-                      : "bg-[#F3F4F6] hover:bg-[#FACC15]/10 border border-transparent"
-                  }`}
-                  onClick={() => handleFileSelect(file)}
-                >
-                  <div className="font-medium text-[#000000]">{file.title || file.name}</div>
-                  <div className="text-xs text-[#374151]">
-                    {file.created_at ? new Date(file.created_at).toLocaleDateString() : ''}
-                  </div>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+    <div className="flex max-w-6xl mx-auto px-6 py-8 gap-8 bg-[#FFFFFF] h-screen">
+      {/* 왼쪽: 내 자료 리스트 - 스크롤 가능하도록 수정 */}
+      <aside className="w-1/4 space-y-4 flex flex-col h-full">
+        <h2 className="text-lg font-bold mb-2 text-[#000000] flex-shrink-0">내 자료</h2>
+        
+        {/* 자료 목록 영역 - 높이 고정 및 스크롤 추가 */}
+        <div className="flex-1 overflow-y-auto pr-2">
+          <ul className="space-y-2">
+            {files.map((file) => {
+              const fileNoteId = file.note_id || file.id;
+              const currentNoteId = selected?.note_id || selected?.id;
+              const isSelected = fileNoteId === currentNoteId;
+              
+              return (
+                <li key={fileNoteId}>
+                  <button
+                    className={`w-full text-left p-3 rounded-lg transition-colors ${
+                      isSelected
+                        ? "bg-[#FACC15]/20 border border-[#FACC15] font-semibold"
+                        : "bg-[#F3F4F6] hover:bg-[#FACC15]/10 border border-transparent"
+                    }`}
+                    onClick={() => handleFileSelect(file)}
+                  >
+                    <div className="font-medium text-[#000000]">{file.title || file.name}</div>
+                    <div className="text-xs text-[#374151]">
+                      {file.created_at ? new Date(file.created_at).toLocaleDateString() : ''}
+                    </div>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       </aside>
 
-      {/* 가운데: 파일 미리보기 + 요약본 */}
-      <main className="flex-1 space-y-6">
+      {/* 가운데: 파일 미리보기 + 요약본 - 스크롤 가능하도록 수정 */}
+      <main className="flex-1 space-y-6 flex flex-col h-full overflow-hidden">
         {/* 파일 미리보기 */}
-        <section className="bg-[#FFFFFF] p-6 rounded-xl shadow-sm border border-[#F3F4F6] space-y-4">
-          <h2 className="text-lg font-bold mb-2 text-[#000000]">파일 미리보기</h2>
-          {renderFilePreview()}
+        <section className="bg-[#FFFFFF] p-6 rounded-xl shadow-sm border border-[#F3F4F6] flex-1 flex flex-col">
+          <h2 className="text-lg font-bold mb-4 text-[#000000] flex-shrink-0">파일 미리보기</h2>
+          <div className="flex-1 overflow-y-auto">
+            {renderFilePreview()}
+          </div>
         </section>
 
         {/* 요약본 */}
-        <section className="bg-[#FFFFFF] p-6 rounded-xl shadow-sm border border-[#F3F4F6] space-y-4">
+        <section className="bg-[#FFFFFF] p-6 rounded-xl shadow-sm border border-[#F3F4F6] flex-shrink-0">
           <h2 className="text-lg font-bold mb-2 text-[#000000]">요약본</h2>
-          <pre className="bg-[#FACC15]/10 p-4 rounded-lg whitespace-pre-wrap text-[#374151] border border-[#FACC15]/20">
-            {summary || "요약 정보 없음"}
-          </pre>
+          <div className="max-h-48 overflow-y-auto">
+            <pre className="bg-[#FACC15]/10 p-4 rounded-lg whitespace-pre-wrap text-[#374151] border border-[#FACC15]/20">
+              {summary || "요약 정보 없음"}
+            </pre>
+          </div>
         </section>
       </main>
 
-      {/* 오른쪽: 키워드 관리 */}
-      <aside className="w-1/4 flex flex-col space-y-4">
-        <h2 className="text-lg font-bold text-[#000000]">키워드 ({keywords.length}개)</h2>
+      {/* 오른쪽: 키워드 관리 - 높이 고정 */}
+      <aside className="w-1/4 flex flex-col space-y-4 h-full">
+        <h2 className="text-lg font-bold text-[#000000] flex-shrink-0">키워드 ({keywords.length}개)</h2>
         
         <div className="bg-[#FFFFFF] p-4 rounded-xl shadow-sm border border-[#F3F4F6] flex-1 flex flex-col">
-          {/* 키워드 표시 영역 */}
-          <div className="flex-1 mb-4 min-h-[100px] overflow-y-auto">
+          {/* 키워드 표시 영역 - 스크롤 가능 */}
+          <div className="flex-1 mb-4 overflow-y-auto">
             {keywords.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {keywords.map((kw, idx) => {
@@ -454,8 +462,8 @@ export default function HomePresenter() {
             )}
           </div>
           
-          {/* 키워드 추가 영역 */}
-          <div className="mt-auto border-t border-[#F3F4F6] pt-4">
+          {/* 키워드 추가 영역 - 하단 고정 */}
+          <div className="flex-shrink-0 border-t border-[#F3F4F6] pt-4">
             <div className="flex flex-col gap-2">
               <input
                 type="text"
