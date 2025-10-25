@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useMemo } from "react";
-import apiClient from "../../utils/apiClient";  // apiClient import 추가
+import apiClient from "../../utils/apiClient";
 
 // 키워드 타입 정의 - source 필드 추가
 interface Keyword {
@@ -42,29 +42,21 @@ export default function HomePresenter() {
   const refreshKeywords = async (noteId: number) => {
     try {
       console.log('🔄 키워드 새로고침 시작 (노트 상세 API 사용):', noteId);
-      const noteResponse = await apiClient.get(`/notes/${noteId}`);
+      const response = await apiClient.get(`/notes/${noteId}`);
+      const noteData = response.data;
+      console.log('🔄 노트 상세 전체 응답:', noteData);
       
-      console.log('🔄 노트 상세 응답 상태:', noteResponse.status);
-      
-      if (noteResponse.ok) {
-        const noteData = noteResponse.data;
-        console.log('🔄 노트 상세 전체 응답:', noteData);
-        
-        if (noteData.success && noteData.data && noteData.data.note && noteData.data.note.keywords) {
-          // name -> word 필드 매핑 및 source 설정
-          const mappedKeywords = noteData.data.note.keywords.map((kw: any) => ({
-            keyword_id: kw.keyword_id,
-            word: kw.name || kw.word, // name 필드를 word로 매핑
-            source: kw.source || 'ai' // AI 생성 키워드로 기본 설정
-          }));
-          console.log('🔄 매핑된 키워드 목록:', mappedKeywords);
-          setKeywords(mappedKeywords);
-        } else {
-          console.warn('❌ 키워드 데이터가 없음:', noteData);
-          setKeywords([]);
-        }
+      if (noteData.success && noteData.data && noteData.data.note && noteData.data.note.keywords) {
+        // name -> word 필드 매핑 및 source 설정
+        const mappedKeywords = noteData.data.note.keywords.map((kw: any) => ({
+          keyword_id: kw.keyword_id,
+          word: kw.name || kw.word, // name 필드를 word로 매핑
+          source: kw.source || 'ai' // AI 생성 키워드로 기본 설정
+        }));
+        console.log('🔄 매핑된 키워드 목록:', mappedKeywords);
+        setKeywords(mappedKeywords);
       } else {
-        console.error('❌ 노트 상세 조회 실패:', noteResponse.status);
+        console.warn('❌ 키워드 데이터가 없음:', noteData);
         setKeywords([]);
       }
     } catch (error) {
@@ -86,10 +78,8 @@ export default function HomePresenter() {
     
     // 노트 상세 정보만 불러오기 (키워드 포함)
     apiClient.get(`/notes/${selectedNoteId}`)
-      .then(async (noteRes) => {
-        console.log('🔄 노트 응답 상태:', noteRes.status);
-        
-        const noteData = noteRes.data;
+      .then(response => {
+        const noteData = response.data;
         console.log('🔄 노트 상세 데이터:', noteData);
         
         // 노트 데이터 처리 - files 배열 및 키워드 포함
@@ -171,11 +161,10 @@ export default function HomePresenter() {
         word: cleanedInput
       });
       
-      console.log('➕ 키워드 추가 응답 상태:', response.status);
       const result = response.data;
       console.log('➕ 키워드 추가 응답 데이터:', result);
       
-      if (response.ok && result.success) {
+      if (result.success) {
         console.log('✅ 키워드 추가 성공, 목록 새로고침 시작');
         await refreshKeywords(selectedNoteId);
         setNewKeyword("");
@@ -205,12 +194,10 @@ export default function HomePresenter() {
       console.log('🗑️ 삭제 요청 URL:', deleteUrl);
       
       const response = await apiClient.delete(deleteUrl);
-      
-      console.log('🗑️ 삭제 응답 상태:', response.status);
       const result = response.data;
       console.log('🗑️ 삭제 응답 데이터:', result);
       
-      if (response.ok && result.success) {
+      if (result.success) {
         console.log('✅ 키워드 삭제 성공, 목록 새로고침 시작');
         await refreshKeywords(selectedNoteId as number);
         console.log('✅ 키워드 삭제 완료');
@@ -243,7 +230,7 @@ export default function HomePresenter() {
 
   // 파일 미리보기 렌더링 - files 배열 사용하도록 수정
   const renderFilePreview = () => {
-    if (!selected) return <div className="flex items-center justify-center h-[500px] text-[#374151]">파일을 선택해주세요</div>;
+    if (!selected) return <div className="flex items-center justify-center h-32 text-[#374151]">파일을 선택해주세요</div>;
 
     console.log('🔍 파일 미리보기 렌더링:', {
       files: selected.files,
@@ -256,7 +243,7 @@ export default function HomePresenter() {
     if (attachedFiles.length === 0) {
       // 첨부 파일이 없으면 텍스트 내용 표시
       return (
-        <div className="bg-[#F3F4F6] p-6 rounded-lg max-h-[500px] overflow-auto">
+        <div className="bg-[#F3F4F6] p-4 rounded-lg">
           <pre className="whitespace-pre-wrap text-sm text-[#374151]">
             {selected.content || selected.summary || "내용이 없습니다."}
           </pre>
@@ -278,11 +265,11 @@ export default function HomePresenter() {
     // 이미지 파일 처리
     if (fileType?.startsWith('image')) {
       return (
-        <div className="space-y-4">
+        <div className="space-y-3">
           <img 
             src={fileUrl} 
             alt={selected.title} 
-            className="max-w-full max-h-[500px] mx-auto object-contain rounded-lg" 
+            className="max-w-full max-h-96 mx-auto object-contain rounded-lg" 
             onError={(e) => {
               console.error('이미지 로드 실패:', fileUrl);
               e.currentTarget.style.display = 'none';
@@ -297,23 +284,23 @@ export default function HomePresenter() {
       );
     }
     
-    // PDF 파일 처리 - 새 탭으로 열기만 가능 (다운로드 버튼 제거)
+    // PDF 파일 처리 - 컴팩트하게 수정
     if (fileType === 'pdf' || fileType === 'application/pdf') {
       return (
-        <div className="space-y-4">
-          <div className="bg-[#F3F4F6] p-8 rounded-lg text-center">
-            <div className="space-y-4">
-              <div className="text-6xl">📄</div>
+        <div className="space-y-3">
+          <div className="bg-[#F3F4F6] p-6 rounded-lg text-center">
+            <div className="space-y-3">
+              <div className="text-4xl">📄</div>
               <div>
-                <h3 className="text-lg font-semibold text-[#374151] mb-2">PDF 파일</h3>
-                <p className="text-sm text-[#9CA3AF] mb-4">{firstFile.fileName}</p>
+                <h3 className="text-lg font-semibold text-[#374151] mb-1">PDF 파일</h3>
+                <p className="text-sm text-[#9CA3AF] mb-3">{firstFile.fileName}</p>
               </div>
               <div>
                 <a
                   href={fileUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-block px-6 py-3 bg-[#FACC15] text-[#000000] rounded-lg hover:bg-[#F59E0B] transition-colors font-semibold"
+                  className="inline-block px-4 py-2 bg-[#FACC15] text-[#000000] rounded-lg hover:bg-[#F59E0B] transition-colors font-semibold text-sm"
                 >
                   📖 새 탭에서 보기
                 </a>
@@ -329,9 +316,9 @@ export default function HomePresenter() {
       );
     }
     
-    // 기타 파일 타입 - 다운로드 링크와 함께 텍스트 내용 표시
+    // 기타 파일 타입
     return (
-      <div className="space-y-4">
+      <div className="space-y-3">
         <div className="bg-[#F3F4F6] p-4 rounded-lg">
           <div className="flex items-center gap-2 mb-2">
             <span className="text-sm font-medium text-[#374151]">첨부 파일:</span>
@@ -350,7 +337,7 @@ export default function HomePresenter() {
             </div>
           )}
         </div>
-        <div className="bg-[#F3F4F6] p-6 rounded-lg max-h-[500px] overflow-auto">
+        <div className="bg-[#F3F4F6] p-4 rounded-lg">
           <pre className="whitespace-pre-wrap text-sm text-[#374151]">
             {selected.content || selected.summary || "내용이 없습니다."}
           </pre>
@@ -360,13 +347,13 @@ export default function HomePresenter() {
   };
 
   return (
-    <div className="flex max-w-6xl mx-auto px-6 py-8 gap-8 bg-[#FFFFFF] h-screen">
-      {/* 왼쪽: 내 자료 리스트 - 스크롤 가능하도록 수정 */}
-      <aside className="w-1/4 space-y-4 flex flex-col h-full">
-        <h2 className="text-lg font-bold mb-2 text-[#000000] flex-shrink-0">내 자료</h2>
+    <div className="flex max-w-6xl mx-auto px-6 py-8 gap-6 bg-[#FFFFFF] h-[calc(100vh-4rem)] overflow-hidden">
+      {/* 왼쪽: 내 자료 리스트 */}
+      <aside className="w-1/4 flex flex-col h-full">
+        <h2 className="text-lg font-bold mb-4 text-[#000000] flex-shrink-0">내 자료</h2>
         
-        {/* 자료 목록 영역 - 높이 고정 및 스크롤 추가 */}
-        <div className="flex-1 overflow-y-auto pr-2">
+        {/* 자료 목록 영역 */}
+        <div className="flex-1 overflow-y-auto pr-2 min-h-0">
           <ul className="space-y-2">
             {files.map((file) => {
               const fileNoteId = file.note_id || file.id;
@@ -395,34 +382,40 @@ export default function HomePresenter() {
         </div>
       </aside>
 
-      {/* 가운데: 파일 미리보기 + 요약본 - 스크롤 가능하도록 수정 */}
-      <main className="flex-1 space-y-6 flex flex-col h-full overflow-hidden">
-        {/* 파일 미리보기 */}
-        <section className="bg-[#FFFFFF] p-6 rounded-xl shadow-sm border border-[#F3F4F6] flex-1 flex flex-col">
+      {/* 가운데: 파일 미리보기 + 요약본 */}
+      <main className="flex-1 flex flex-col h-full gap-4 min-w-0">
+        {/* 파일 미리보기 - 높이를 내용에 맞게 조정 */}
+        <section className="bg-[#FFFFFF] p-6 rounded-xl shadow-sm border border-[#F3F4F6] flex flex-col">
           <h2 className="text-lg font-bold mb-4 text-[#000000] flex-shrink-0">파일 미리보기</h2>
-          <div className="flex-1 overflow-y-auto">
+          <div className="overflow-y-auto">
             {renderFilePreview()}
           </div>
         </section>
 
-        {/* 요약본 */}
-        <section className="bg-[#FFFFFF] p-6 rounded-xl shadow-sm border border-[#F3F4F6] flex-shrink-0">
-          <h2 className="text-lg font-bold mb-2 text-[#000000]">요약본</h2>
-          <div className="max-h-48 overflow-y-auto">
-            <pre className="bg-[#FACC15]/10 p-4 rounded-lg whitespace-pre-wrap text-[#374151] border border-[#FACC15]/20">
-              {summary || "요약 정보 없음"}
-            </pre>
+        {/* 요약본 - 스크롤 가능하도록 수정 */}
+        <section className="bg-[#FFFFFF] p-6 rounded-xl shadow-sm border border-[#F3F4F6] flex flex-col min-h-0">
+          <h2 className="text-lg font-bold mb-4 text-[#000000] flex-shrink-0">요약본</h2>
+          <div className="flex-1 overflow-y-auto min-h-0">
+            {summary ? (
+              <pre className="bg-[#FACC15]/10 p-4 rounded-lg whitespace-pre-wrap text-[#374151] border border-[#FACC15]/20 text-sm">
+                {summary}
+              </pre>
+            ) : (
+              <div className="bg-[#F3F4F6] p-4 rounded-lg text-center text-[#9CA3AF] text-sm">
+                요약 정보 없음
+              </div>
+            )}
           </div>
         </section>
       </main>
 
-      {/* 오른쪽: 키워드 관리 - 높이 고정 */}
-      <aside className="w-1/4 flex flex-col space-y-4 h-full">
-        <h2 className="text-lg font-bold text-[#000000] flex-shrink-0">키워드 ({keywords.length}개)</h2>
+      {/* 오른쪽: 키워드 관리 - 내용에 맞게 높이 조정 */}
+      <aside className="w-1/4 flex flex-col h-full">
+        <h2 className="text-lg font-bold text-[#000000] flex-shrink-0 mb-4">키워드 ({keywords.length}개)</h2>
         
-        <div className="bg-[#FFFFFF] p-4 rounded-xl shadow-sm border border-[#F3F4F6] flex-1 flex flex-col">
-          {/* 키워드 표시 영역 - 스크롤 가능 */}
-          <div className="flex-1 mb-4 overflow-y-auto">
+        <div className="bg-[#FFFFFF] p-4 rounded-xl shadow-sm border border-[#F3F4F6] flex flex-col">
+          {/* 키워드 표시 영역 - 내용에 맞게 높이 조정 */}
+          <div className="mb-4">
             {keywords.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {keywords.map((kw, idx) => {
@@ -456,14 +449,14 @@ export default function HomePresenter() {
                 })}
               </div>
             ) : (
-              <div className="text-[#9CA3AF] text-sm text-center py-8 h-full flex items-center justify-center">
+              <div className="text-[#9CA3AF] text-sm text-center py-8">
                 {selectedNoteId ? '키워드가 없습니다.' : '파일을 선택하면 키워드를 볼 수 있습니다.'}
               </div>
             )}
           </div>
           
-          {/* 키워드 추가 영역 - 하단 고정 */}
-          <div className="flex-shrink-0 border-t border-[#F3F4F6] pt-4">
+          {/* 키워드 추가 영역 */}
+          <div className="border-t border-[#F3F4F6] pt-4">
             <div className="flex flex-col gap-2">
               <input
                 type="text"
