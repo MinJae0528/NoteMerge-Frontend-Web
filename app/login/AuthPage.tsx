@@ -1,23 +1,26 @@
 'use client';
 
 import { useState, useEffect } from "react";
+import { useAuth } from "../../context/AuthContext";
 
 export default function AuthPage({ mode = "login" }) {
   const [email, setEmail] = useState("");
-  const [nickname, setNickname] = useState(""); // 닉네임 추가
+  const [nickname, setNickname] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [isLogin, setIsLogin] = useState(mode === "login");
-  const [loggedIn, setLoggedIn] = useState(false);
+  
+  // AuthContext 사용
+  const { isLoggedIn, login, logout } = useAuth();
 
-  // 클라이언트에서만 localStorage 접근
+  // 이미 로그인된 상태라면 즉시 홈으로 리디렉션
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      setLoggedIn(!!localStorage.getItem("token"));
+    if (isLoggedIn) {
+      window.location.href = "/";
     }
-  }, []);
+  }, [isLoggedIn]);
 
   // 로그인/회원가입 처리
   const handleSubmit = async (e: React.FormEvent) => {
@@ -42,18 +45,17 @@ export default function AuthPage({ mode = "login" }) {
           body: JSON.stringify(
             isLogin
               ? { username: email, password }
-              : { username: nickname, email, password } // 회원가입 시 닉네임(username) 추가
+              : { username: nickname, email, password }
           ),
         }
       );
       const data = await res.json();
       if (data.success) {
-        if (typeof window !== "undefined") {
-          localStorage.setItem("token", data.data.token);
-        }
-        setMessage(isLogin ? "로그인 성공!" : "회원가입 성공! 자동 로그인됩니다.");
-        setLoggedIn(true);
-        setTimeout(() => (window.location.href = "/"), 1000);
+        // AuthContext의 login 함수에 토큰 전달 후 바로 홈으로 이동
+        login(data.data.token);
+        setMessage(isLogin ? "로그인 성공!" : "회원가입 성공!");
+        // setTimeout 제거하고 바로 이동
+        window.location.href = "/";
       } else {
         setMessage(data.message || "오류가 발생했습니다.");
       }
@@ -64,36 +66,21 @@ export default function AuthPage({ mode = "login" }) {
     }
   };
 
-  // 로그아웃 처리
+  // 로그아웃 처리 - 바로 로그아웃하고 현재 페이지 새로고침
   const handleLogout = () => {
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("token");
-    }
-    setLoggedIn(false);
+    logout();
     setMessage("로그아웃 되었습니다.");
+    // 페이지 새로고침으로 로그인 폼 표시
+    window.location.reload();
   };
 
-  if (loggedIn) {
+  // 로그인된 상태에서는 아무것도 렌더링하지 않음 (리디렉션 중)
+  if (isLoggedIn) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white">
-        <div className="w-full max-w-md bg-[#F3F4F6] p-8 rounded-xl shadow-lg space-y-6 text-center">
-          <img
-            src="/Images/notemerge_logo.png"
-            alt="Notemerge Logo"
-            className="h-12 mx-auto mb-6"
-          />
-          <h2 className="text-2xl font-bold text-black mb-4">
-            로그인 상태입니다
-          </h2>
-          <button
-            onClick={handleLogout}
-            className="w-full bg-[#FACC15] text-black font-semibold py-2 rounded-md hover:bg-yellow-500 transition"
-          >
-            로그아웃
-          </button>
-          {message && (
-            <div className="text-center text-sm text-red-600 mt-2">{message}</div>
-          )}
+        <div className="text-center">
+          <div className="text-lg font-semibold text-[#374151] mb-2">홈으로 이동 중...</div>
+          <div className="w-8 h-8 border-4 border-[#FACC15] border-t-transparent rounded-full animate-spin mx-auto"></div>
         </div>
       </div>
     );
