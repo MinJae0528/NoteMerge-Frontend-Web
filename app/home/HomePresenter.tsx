@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState, useMemo } from "react";
+import apiClient from "../../utils/apiClient";  // apiClient import 추가
 
 // 키워드 타입 정의 - source 필드 추가
 interface Keyword {
@@ -17,19 +18,18 @@ export default function HomePresenter() {
   const [newKeyword, setNewKeyword] = useState("");
   const [summary, setSummary] = useState("");
 
-  // 파일 목록 불러오기
+  // 파일 목록 불러오기 - apiClient 사용
   useEffect(() => {
-    fetch("http://localhost:3000/api/notes", {
-      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
-    })
-      .then(res => res.json())
-      .then(data => {
+    apiClient.get("/notes")
+      .then(response => {
+        const data = response.data;
         const filesArr = Array.isArray(data?.data?.notes) ? data.data.notes : [];
         setFiles(filesArr);
         if (filesArr.length > 0) setSelected(filesArr[0]);
       })
       .catch(error => {
         console.error('파일 목록 로딩 오류:', error);
+        // 401 에러는 인터셉터에서 자동 처리됨
       });
   }, []);
 
@@ -42,14 +42,12 @@ export default function HomePresenter() {
   const refreshKeywords = async (noteId: number) => {
     try {
       console.log('🔄 키워드 새로고침 시작 (노트 상세 API 사용):', noteId);
-      const noteResponse = await fetch(`http://localhost:3000/api/notes/${noteId}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
-      });
+      const noteResponse = await apiClient.get(`/notes/${noteId}`);
       
       console.log('🔄 노트 상세 응답 상태:', noteResponse.status);
       
       if (noteResponse.ok) {
-        const noteData = await noteResponse.json();
+        const noteData = noteResponse.data;
         console.log('🔄 노트 상세 전체 응답:', noteData);
         
         if (noteData.success && noteData.data && noteData.data.note && noteData.data.note.keywords) {
@@ -87,13 +85,11 @@ export default function HomePresenter() {
     console.log('🔄 선택된 노트 ID:', selectedNoteId);
     
     // 노트 상세 정보만 불러오기 (키워드 포함)
-    fetch(`http://localhost:3000/api/notes/${selectedNoteId}`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
-    })
+    apiClient.get(`/notes/${selectedNoteId}`)
       .then(async (noteRes) => {
         console.log('🔄 노트 응답 상태:', noteRes.status);
         
-        const noteData = await noteRes.json();
+        const noteData = noteRes.data;
         console.log('🔄 노트 상세 데이터:', noteData);
         
         // 노트 데이터 처리 - files 배열 및 키워드 포함
@@ -170,20 +166,13 @@ export default function HomePresenter() {
     });
     
     try {
-      const response = await fetch('http://localhost:3000/api/keywords', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem("token")}`
-        },
-        body: JSON.stringify({ 
-          note_id: selectedNoteId,
-          word: cleanedInput
-        })
+      const response = await apiClient.post('/keywords', { 
+        note_id: selectedNoteId,
+        word: cleanedInput
       });
       
       console.log('➕ 키워드 추가 응답 상태:', response.status);
-      const result = await response.json();
+      const result = response.data;
       console.log('➕ 키워드 추가 응답 데이터:', result);
       
       if (response.ok && result.success) {
@@ -212,18 +201,13 @@ export default function HomePresenter() {
     });
     
     try {
-      const deleteUrl = `http://localhost:3000/api/keywords/${keyword.keyword_id}?note_id=${selectedNoteId}`;
+      const deleteUrl = `/keywords/${keyword.keyword_id}?note_id=${selectedNoteId}`;
       console.log('🗑️ 삭제 요청 URL:', deleteUrl);
       
-      const response = await fetch(deleteUrl, {
-        method: 'DELETE',
-        headers: { 
-          'Authorization': `Bearer ${localStorage.getItem("token")}`
-        }
-      });
+      const response = await apiClient.delete(deleteUrl);
       
       console.log('🗑️ 삭제 응답 상태:', response.status);
-      const result = await response.json();
+      const result = response.data;
       console.log('🗑️ 삭제 응답 데이터:', result);
       
       if (response.ok && result.success) {
@@ -313,7 +297,7 @@ export default function HomePresenter() {
       );
     }
     
-    // PDF 파일 처리 - 새 탭으로 열기 방식
+    // PDF 파일 처리 - 새 탭으로 열기만 가능 (다운로드 버튼 제거)
     if (fileType === 'pdf' || fileType === 'application/pdf') {
       return (
         <div className="space-y-4">
@@ -324,7 +308,7 @@ export default function HomePresenter() {
                 <h3 className="text-lg font-semibold text-[#374151] mb-2">PDF 파일</h3>
                 <p className="text-sm text-[#9CA3AF] mb-4">{firstFile.fileName}</p>
               </div>
-              <div className="space-y-2">
+              <div>
                 <a
                   href={fileUrl}
                   target="_blank"
@@ -332,14 +316,6 @@ export default function HomePresenter() {
                   className="inline-block px-6 py-3 bg-[#FACC15] text-[#000000] rounded-lg hover:bg-[#F59E0B] transition-colors font-semibold"
                 >
                   📖 새 탭에서 보기
-                </a>
-                <br />
-                <a
-                  href={fileUrl}
-                  download={firstFile.fileName}
-                  className="inline-block px-4 py-2 bg-[#374151] text-[#FFFFFF] rounded-lg hover:bg-[#000000] transition-colors text-sm"
-                >
-                  💾 다운로드
                 </a>
               </div>
             </div>
